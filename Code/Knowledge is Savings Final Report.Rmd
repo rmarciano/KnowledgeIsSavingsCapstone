@@ -1,0 +1,260 @@
+---
+title: "Knowledge Is Savings: Pricing in Healthcare"
+author: "A report by Rachel Marciano"
+date: "February 28, 2019"
+output: md_document
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+library(lattice)
+library(ggplot2)
+library(caTools)
+library(DAAG)
+library(caret)
+library(leaps)
+library(ggvis)
+library(leaflet)
+library(tidyverse)
+library(scales)
+library(geojsonio)
+library(RColorBrewer)
+library(sp)
+library(ROCR)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(geojsonio)
+
+payment <- read_csv("Capstone_Project_Tidy_Data.csv")
+
+
+county_patient_payment <- read.csv("County Patient Payment.csv")
+county_merged <- geojson_read(x = "County Merged.geojson", what = "sp")
+states <- geojson_read(x = "gz_2010_us_040_00_5m.json", what = "sp")
+counties <- geojson_read(x = "gz_2010_us_050_00_5m.json", what = "sp")
+payment_zip <-read.csv("Payment Zip.csv", stringsAsFactors = FALSE)
+
+coul = brewer.pal(9, "YlOrRd")
+coul = colorRampPalette(coul)(15)
+
+```
+
+*What’s the problem?*  
+
+Medical costs continue to climb.  Patients often feel they can’t afford the medical care they need.  Due to the high cost, many patients either choose or are forced to forgo their procedure(s), which means their health continues to decline.  There are two groups patients blame when they feel the cost of healthcare is too high: medical facilities and insurance providers.
+
+As an insurance provider, you want to keep patients healthy, and you want them to be happy with their insurance product.  The healthier the patient, the less expensive their care will be both for them and the company paying the claims.  And if they feel their insurance is helping them find affordable care, they're more likely to continue business with that company as well.
+
+
+*What's the solution?*  
+
+Even though medical care is expensive, there are cheaper options for patients, as each facility has their own negotatied rates.  As an insurance company, you can help your patients determine an affordable alternative within their area.  This will make the patient more likely to recieve the necessary procedure and they'll feel like their insurance cares about their needs. 
+	
+*How do we achieve this goal?*  
+
+I have created a web-based application that shows average Medicare patient pricing by county for the 100 most common inpatient procedures.  This tool can be used to help patients determine nearby counties that can offer a less expensive out of pocket.  The application can also be used to pinpoint areas to focus testing new methods to help lower costs.  For example, Medicare patients within the most expensive counties could be sent an automatic call at certain times of the year to remind them to schedule their preventative care.  We could also try offering special screening days for patients with educational sessions for them to attend. Staying on track with their checkups and screenings can help patients avoid more drastic inpatient procedures later on, which will save money in the long term.  The idea is that this application is just the beginning, and will eventually become a tool to guide patients to specific lower cost facilities within their area. Other data can easily be applied to this framework and the current dataset can be expanded as new data becomes available, meaning the application can be used for multiple patient populations.
+
+##THE PROCESS  
+
+*Cleaning the data*  
+
+The original dataset from cms.gov shows pricing information for the top 100 inpatient DRG codes in the United States by facility.  Values included are the DRG codes used, a unique identifier for each provider, provider address, provider name, provider zip code, average covered charges (the amount the hospital charges for the procedure that is covered by Medicare), average total payments (the Medicare negotiated rate plus patient deductible and coinsurance), and average Medicare payment (Medicare negotiated rate minus patient deductible and coinsurance).  The data was already relatively clean in its original form, and there were no missing values, but I separated the DRG code from the DRG Definition to make analysis easier. I also created a new variable, average patient payments, by taking the difference between the average total payments and the average Medicare payments.  For this implementation on the application, I chose to create a choropleth map rather than use markers. Since zip codes don't have definitive boundaries, I chose to map the data by county.  I joined my cleaned dataset with a zip code database that includes zip codes and counties in order to group the facilities by county.  I then took a shapefile of counties from the US census and joined my dataset to the shape file, adding a column for average patient out of pocket per county as well.  Lastly, I made a new dataset that calculated the average patient out of pocket for each DRG code per county for a more in depth analysis.
+	
+*Analyzing the data*  
+
+After cleaning the data, I ran basic analysis by state to get a feel for the dataset. I wanted to determine if there were substantial differences in trends across the US for Medicare prices versus patient costs.  I first created a ranking of states by average Medicare costs across all codes and all facilities.  I created a subset of the original data and added a new variable, mean medicare pay to show the average Medicare cost for each state.  I plotted this new dataset by state to see a ranking of all 50 states (plus Washington D.C.).  I expected to see the states containing the largest cities and highest cost of living in the top 10 (mainly New York, California, Florida, Illinois, Massachusetts, Washington D.C., etc).  I was quite surprised to see that Alaska, Wyoming, and Connecticut all made it into the top 10, while Florida and Illinois weren’t even in the top 20.  
+	
+```{r payment, fig.height = 10, fig.width = 25, fig.align = "center", echo = FALSE}
+
+SumMedicarePay <- payment %>% group_by(Provider_State) %>% summarize(MeanMedicarePay = mean(Average_Medicare_Payments))
+
+SumMedicarePay_ordered <- SumMedicarePay[order(SumMedicarePay$MeanMedicarePay) , ]
+
+SumMedicarePay_ordered_split <- split(SumMedicarePay_ordered, rep(1:3, each = 17))
+SumMedicarePay1 <- SumMedicarePay_ordered_split$'1'
+SumMedicarePay2 <- SumMedicarePay_ordered_split$'2'
+SumMedicarePay3 <- SumMedicarePay_ordered_split$'3'
+
+SumMedicarePay1_plot <- ggplot(data = SumMedicarePay1, aes(x = reorder(Provider_State, MeanMedicarePay), y = MeanMedicarePay)) + geom_point() + theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            axis.title = element_text(size = 18),
+            plot.title = element_text(size =24))
+SumMedicarePay2_plot <- ggplot(data = SumMedicarePay2, aes(x = reorder(Provider_State, MeanMedicarePay), y = MeanMedicarePay)) + geom_point() + theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            axis.title = element_text(size = 18),
+            plot.title = element_text(size =24))
+SumMedicarePay3_plot <- ggplot(data = SumMedicarePay3, aes(x = reorder(Provider_State, MeanMedicarePay), y = MeanMedicarePay)) + geom_point() + theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            axis.title = element_text(size = 18),
+            plot.title = element_text(size =24))
+
+SumMedicarePay1_plot <- SumMedicarePay1_plot + ylim(6000, 13000)
+SumMedicarePay2_plot <- SumMedicarePay2_plot + ylim(6000, 13000)
+SumMedicarePay3_plot <- SumMedicarePay3_plot + ylim(6000, 13000)
+
+SumMedicarePay1_plot <- SumMedicarePay1_plot + labs(x = "State", y = "Average Medicare Cost")
+SumMedicarePay2_plot <- SumMedicarePay2_plot + labs(x = "State", y = "Average Medicare Cost")
+SumMedicarePay3_plot <- SumMedicarePay3_plot + labs(x = "State", y = "Average Medicare Cost")
+
+SumMedicarePay1_plot
+SumMedicarePay2_plot
+SumMedicarePay3_plot
+
+
+```
+
+I then created a new ranking showing average patient out of pocket across the states.  I created a new variable to show this average. I then plotted the new subset, creating a ranking I could compare with the Medicare price ranking above. I expected the rankings to have quite a bit of overlap, but found many differences.  Very few states retained a similar position.  And again, many states with large cities and high cost of living remained outside of the top 10.  
+	
+```{r payment2, fig.height = 10, fig.width = 25, fig.align = "center", echo = FALSE}
+
+SumPatientPay <- payment %>% group_by(Provider_State) %>% summarize(MeanPatientPay = mean(Average_Patient_Payments))
+SumPatientPay_ordered <- SumPatientPay[order(SumPatientPay$MeanPatientPay) , ]
+SumPatientPay_ordered_split <- split(SumPatientPay_ordered, rep(1:3, each = 17))
+SumPatientPay1 <- SumPatientPay_ordered_split$'1'
+SumPatientPay2 <- SumPatientPay_ordered_split$'2'
+SumPatientPay3 <- SumPatientPay_ordered_split$'3'
+
+SumPatientPay1_plot <- ggplot(data = SumPatientPay1, aes(x = reorder(Provider_State, MeanPatientPay), y = MeanPatientPay)) + geom_point() + theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            axis.title = element_text(size = 18),
+            plot.title = element_text(size =24))
+SumPatientPay2_plot <- ggplot(data = SumPatientPay2, aes(x = reorder(Provider_State, MeanPatientPay), y = MeanPatientPay)) + geom_point() +  theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            axis.title = element_text(size = 18),
+            plot.title = element_text(size =24))
+SumPatientPay3_plot <- ggplot(data = SumPatientPay3, aes(x = reorder(Provider_State, MeanPatientPay), y = MeanPatientPay)) + geom_point() +  theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            axis.title = element_text(size = 18),
+            plot.title = element_text(size =24))
+
+SumPatientPay1_plot <- SumPatientPay1_plot + ylim(1000, 2000)
+SumPatientPay2_plot <- SumPatientPay2_plot + ylim(1000, 2000)
+SumPatientPay3_plot <- SumPatientPay3_plot + ylim(1000, 2000)
+
+SumPatientPay1_plot <- SumPatientPay1_plot + labs(x = "State", y = "Average Patient Cost")
+SumPatientPay2_plot <- SumPatientPay2_plot + labs(x = "State", y = "Average Patient Cost")
+SumPatientPay3_plot <- SumPatientPay3_plot + labs(x = "State", y = "Average Patient Cost")
+
+SumPatientPay1_plot
+SumPatientPay2_plot
+SumPatientPay3_plot
+
+```
+	
+Lastly, I analyzed the relationship between total discharges and patient out of pocket prices.  I made a graph plotting patient costs against total discharges, which shows that as total discharges decrease, average patient payment tends to increase.  This means that when a facility performs a procedure more often, the patient cost tends to lower.  
+
+```{r payment3, echo = FALSE}
+
+discharge_plot <- ggplot(data = payment, aes(x = Average_Patient_Payments, y = Total_Discharges )) + geom_point()
+discharge_plot <- discharge_plot + labs(x = "Average Patient Payments", y = "Total Discharges")
+discharge_plot
+
+```
+ 
+*Predictive model*  
+
+I created a model to predict average patient out of pocket based on a binary of average patient costs under $1000 and average patient costs over $1000.  I started with a basic CART model, splitting the data into a training and testing set, and setting a minbucket of 25.  Once I created the tree, I used it to predict average patient payment with an accuracy of about 0.628.
+
+```{r CART, fig.align = "center", echo = FALSE}
+payment_zip <- subset(payment_zip, select = c("DRG_Code", "Provider_Id", "Provider_Zip", "Total_Discharges", "Average_Covered_Charges", "Average_Total_Payments", "Average_Patient_Payments", "latitude", "longitude", "irs_estimated_population_2015"))
+
+payment_zip$Average_Patient_Payments <- factor(ifelse(payment_zip$Average_Patient_Payments < 1000, 0, 1))
+
+set.seed(100)
+
+split3 <- sample.split(payment_zip$Average_Patient_Payments, SplitRatio = 0.5)
+train3 <- subset(payment_zip, split3 == TRUE)
+test3 <- subset(payment_zip, split3 == FALSE)
+
+binary_tree <- rpart(Average_Patient_Payments ~., data = train3, method = "class", control = rpart.control(minbucket = 25))
+
+rpart.plot(binary_tree)
+
+predict_binary_tree <- predict(binary_tree, newdata = test3, type = "class")
+table(test3$Average_Patient_Payments, predict_binary_tree)
+
+(41704 + 10441)/(41704 + 10441 + 6859 + 23976)
+
+
+
+
+```
+
+After creating the first model, I used 10-fold cross validation and determined the best cp for the model.  I found 0.001 to be the best cp value, and I used that value to create a new tree.  I ran a new prediction with my test set and increased the acccuracy to about 0.655.  The accuracy of this model defintely beats the baseline.  I would like to continue feature engineering to attempt an even better model.
+
+
+
+```{r CART 2, echo = FALSE}
+
+fitControl <- trainControl(method = "cv", number = 10)
+cartGrid <- expand.grid(.cp = (1:50)*0.001)
+train(Average_Patient_Payments ~ ., data = train3, method = "rpart", trControl = fitControl, tuneGrid = cartGrid, na.action = na.omit)
+
+binary_treeCV <- rpart(Average_Patient_Payments ~., method = "class", data = train3, control = rpart.control(cp = 0.001))
+predictCV <- predict(binary_treeCV, newdata = test3, type = "class")
+table(test3$Average_Patient_Payments, predictCV)
+
+(40869 + 13533)/(40869 + 13533 + 7694 + 20884)
+```
+
+
+
+```
+
+ 
+*Making the application*  
+
+To make the application I used the shiny package in R.  I created a choropleth county map based on average patient costs per county, adding interactivity to the map so that users can highlight a county to see the name and average patient cost.  I added a select input with a table output to show the 10 cheapest counties per state.  I then used ggplot2 to create a graph showing average patient costs by DRG code and county, with a select input available for users to choose a DRG code. Due to the complexity of the names associated with each code, I opted to just use the DRG code for now.  The final application can be found at:   https://rmarciano.shinyapps.io/MedicarePatientPricing/.  
+
+```{r leaflet, echo = FALSE}
+
+bins2 <- c(370, 810, 860, 900, 940, 980, 1020, 1070, 1140, 1200, 1310, 1460, 6680)
+pal2 <- colorBin(coul, domain = county_merged$MeanCountyPay, bins = bins2)
+county_merged <- county_merged[!is.na(county_merged@data$MeanCountyPay), ]
+    
+    C <- leaflet(county_merged) %>%
+      setView(-96, 37.8, 4) %>%
+      addTiles() %>%
+      addPolygons(data = counties,
+                  color = "black",
+                  opacity = 0.2,
+                  weight = 1,
+                  fillColor = "#e7dfdf",
+                  fillOpacity = 1) %>% 
+      addPolygons(data = county_merged,
+                  color = "black",
+                  fillColor = ~pal2(MeanCountyPay),
+                  weight = 1,
+                  opacity = 0.2,
+                  dashArray = "3",
+                  fillOpacity = 0.7) %>%
+      addPolylines(data = states,
+                   color = "black",
+                   opacity = 1,
+                   weight = 1) %>%
+      addLegend(pal = pal2, values = ~MeanCountyPay, opacity = 0.7, title = "Average Medicare patient cost by County:",
+                position = "bottomright")
+    C
+    
+    
+```
+
+*What will be improved in the future?*  
+
+There are many improvements I would like to make in the future, mainly I would like to perform a Kruskal Wallis statistical test to see if there is any significant difference in average pricing between regions of the US.  I also plan to use this framework to create an application that will suggest specific facilities to patients based on their zip codes.
+
+
+Data retrieved from:
+https://data.cms.gov/Medicare-Inpatient/Inpatient-Prospective-Payment-System-IPPS-Provider/97k6-zzx3
+http://census.ire.org/data/bulkdata.html
+https://www.unitedstateszipcodes.org/zip-code-database/
+
+
+
