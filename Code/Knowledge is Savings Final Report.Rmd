@@ -46,7 +46,7 @@ coul = colorRampPalette(coul)(15)
 
 ```
 
-*What’s the problem?*  
+*What's the problem?*  
 
 Medical costs continue to climb.  Patients often feel they can’t afford the medical care they need.  Due to the high cost, many patients either choose or are forced to forgo their procedure(s), which means their health continues to decline.  There are two groups patients blame when they feel the cost of healthcare is too high: medical facilities and insurance providers.
 
@@ -69,7 +69,7 @@ The original dataset from cms.gov shows pricing information for the top 100 inpa
 	
 *Analyzing the data*  
 
-After cleaning the data, I ran basic analysis by state to get a feel for the dataset. I wanted to determine if there were substantial differences in trends across the US for Medicare prices versus patient costs.  I first created a ranking of states by average Medicare costs across all codes and all facilities.  I created a subset of the original data and added a new variable, mean medicare pay to show the average Medicare cost for each state.  I plotted this new dataset by state to see a ranking of all 50 states (plus Washington D.C.).  I expected to see the states containing the largest cities and highest cost of living in the top 10 (mainly New York, California, Florida, Illinois, Massachusetts, Washington D.C., etc).  I was quite surprised to see that Alaska, Wyoming, and Connecticut all made it into the top 10, while Florida and Illinois weren’t even in the top 20.  
+After cleaning the data, I ran basic analysis by state to get a feel for the dataset. I wanted to determine if there were substantial differences in trends across the US for Medicare prices versus patient costs.  I first created a ranking of states by average Medicare costs across all codes and all facilities.  I created a subset of the original data and added a new variable, mean medicare pay to show the average Medicare cost for each state.  I plotted this new dataset by state to see a ranking of all 50 states (plus Washington D.C.).  I expected to see the states containing the largest cities and highest cost of living in the top 10 (mainly New York, California, Florida, Illinois, Massachusetts, Washington D.C., etc).  I was quite surprised to see that Alaska, Wyoming, and Connecticut all made it into the top 10, while Florida and Illinois weren't even in the top 20.  
 	
 ```{r payment, fig.height = 10, fig.width = 25, fig.align = "center", echo = FALSE}
 
@@ -195,7 +195,7 @@ After creating the first model, I used 10-fold cross validation and determined t
 
 fitControl <- trainControl(method = "cv", number = 10)
 cartGrid <- expand.grid(.cp = (1:50)*0.001)
-train(Average_Patient_Payments ~ ., data = train3, method = "rpart", trControl = fitControl, tuneGrid = cartGrid, na.action = na.omit)
+train_tree <- train(Average_Patient_Payments ~ ., data = train3, method = "rpart", trControl = fitControl, tuneGrid = cartGrid, na.action = na.omit)
 
 binary_treeCV <- rpart(Average_Patient_Payments ~., method = "class", data = train3, control = rpart.control(cp = 0.001))
 predictCV <- predict(binary_treeCV, newdata = test3, type = "class")
@@ -213,39 +213,7 @@ table(test3$Average_Patient_Payments, predictCV)
 
 To make the application I used the shiny package in R.  I created a choropleth county map based on average patient costs per county, adding interactivity to the map so that users can highlight a county to see the name and average patient cost.  I added a select input with a table output to show the 10 cheapest counties per state.  I then used ggplot2 to create a graph showing average patient costs by DRG code and county, with a select input available for users to choose a DRG code. Due to the complexity of the names associated with each code, I opted to just use the DRG code for now.  The final application can be found at:   https://rmarciano.shinyapps.io/MedicarePatientPricing/.  
 
-```{r leaflet, echo = FALSE}
-
-bins2 <- c(370, 810, 860, 900, 940, 980, 1020, 1070, 1140, 1200, 1310, 1460, 6680)
-pal2 <- colorBin(coul, domain = county_merged$MeanCountyPay, bins = bins2)
-county_merged <- county_merged[!is.na(county_merged@data$MeanCountyPay), ]
-    
-    C <- leaflet(county_merged) %>%
-      setView(-96, 37.8, 4) %>%
-      addTiles() %>%
-      addPolygons(data = counties,
-                  color = "black",
-                  opacity = 0.2,
-                  weight = 1,
-                  fillColor = "#e7dfdf",
-                  fillOpacity = 1) %>% 
-      addPolygons(data = county_merged,
-                  color = "black",
-                  fillColor = ~pal2(MeanCountyPay),
-                  weight = 1,
-                  opacity = 0.2,
-                  dashArray = "3",
-                  fillOpacity = 0.7) %>%
-      addPolylines(data = states,
-                   color = "black",
-                   opacity = 1,
-                   weight = 1) %>%
-      addLegend(pal = pal2, values = ~MeanCountyPay, opacity = 0.7, title = "Average Medicare patient cost by County:",
-                position = "bottomright")
-    C
-    
-    
-```
-
+  
 *What will be improved in the future?*  
 
 There are many improvements I would like to make in the future, mainly I would like to perform a Kruskal Wallis statistical test to see if there is any significant difference in average pricing between regions of the US.  I also plan to use this framework to create an application that will suggest specific facilities to patients based on their zip codes.
