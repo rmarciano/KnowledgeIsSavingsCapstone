@@ -1,6 +1,6 @@
 *What's the problem?*
 
-Medical costs continue to climb. Patients often feel they canât afford
+Medical costs continue to climb. Patients often feel they can't afford
 the medical care they need. Due to the high cost, many patients either
 choose or are forced to forgo their procedure(s), which means their
 health continues to decline. There are two groups patients blame when
