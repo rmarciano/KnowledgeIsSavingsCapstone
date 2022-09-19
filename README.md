@@ -1,6 +1,7 @@
 # Knowledge Is Savings Capstone
 
 Find the final application here: https://rmarciano.shinyapps.io/MedicarePatientPricing/
+Please note the application is quite large and will take some time to fully load.
 
 This project calculates average patient Medicare out of pocket costs for the top 100 inpatient DRG codes in the US, creating an interactive Shiny application that can be used to help determine affordable counties for Medicare patients.
 
